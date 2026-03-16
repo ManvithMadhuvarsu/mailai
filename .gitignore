@@ -1,0 +1,26 @@
+# Secrets & credentials
+.env
+config/credentials.json
+data/token.pickle
+
+# Runtime data
+data/
+output.log
+main.zip
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyc
+.Python
+
+# Virtual environments
+venv/
+env/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp

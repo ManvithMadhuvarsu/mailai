@@ -1,0 +1,14 @@
+services:
+  mailai-agent:
+    build: .
+    container_name: mailai-agent
+    restart: unless-stopped
+    volumes:
+      - ./data:/app/data
+      - ./config:/app/config
+      - ./.env:/app/.env
+    environment:
+      # If using Ollama, Windows/Mac Docker instances connect to host via host.docker.internal
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434
+      # How often to check for new mail (in minutes)
+      - POLL_INTERVAL_MINUTES=15
