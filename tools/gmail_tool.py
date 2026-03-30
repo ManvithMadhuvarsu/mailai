@@ -46,8 +46,19 @@ def get_gmail_service():
     OAuth flow is triggered.
     """
     creds = None
+    
+    # ── Check for TOKEN_B64 from Environment (Render/Cloud Support) ────────────
+    token_b64 = os.getenv("GMAIL_TOKEN_PICKLE_B64")
+    if token_b64:
+        try:
+            logger.info("Found GMAIL_TOKEN_PICKLE_B64 in environment.")
+            creds_data = base64.b64decode(token_b64)
+            creds = pickle.loads(creds_data)
+        except Exception as e:
+            logger.error(f"Failed to decode GMAIL_TOKEN_PICKLE_B64: {e}")
 
-    if TOKEN_PATH.exists():
+    # ── Fallback to local file ────────────────────────────────────────────────
+    if not creds and TOKEN_PATH.exists():
         with open(TOKEN_PATH, "rb") as f:
             creds = pickle.load(f)
 
@@ -65,23 +76,49 @@ def get_gmail_service():
                 creds = None
 
         if not creds:
-            if not CREDENTIALS_PATH.exists():
-                raise FileNotFoundError(
-                    "\n❌  credentials.json not found!\n"
-                    "    1. Go to https://console.cloud.google.com\n"
-                    "    2. Create a project → Enable Gmail API\n"
-                    "    3. Create OAuth 2.0 credentials (Desktop app)\n"
-                    "    4. Download and save as config/credentials.json\n"
-                )
-            flow = InstalledAppFlow.from_client_secrets_file(
-                str(CREDENTIALS_PATH), SCOPES,
-            )
-            creds = flow.run_local_server(port=0)
-            logger.info("New Gmail OAuth token obtained.")
+            # Check for CREDENTIALS_JSON from Environment (Render/Cloud Support)
+            creds_json = os.getenv("GMAIL_CREDENTIALS_JSON")
+            if creds_json:
+                try:
+                    logger.info("Using GMAIL_CREDENTIALS_JSON from environment.")
+                    import json
+                    from google.oauth2.credentials import Credentials
+                    from google_auth_oauthlib.flow import Flow
+                    # Store as temp file for InstallAppFlow (needs a path)
+                    tmp_cred = Path("config/tmp_credentials.json")
+                    tmp_cred.parent.mkdir(exist_ok=True)
+                    with open(tmp_cred, "w") as f:
+                        f.write(creds_json)
+                    flow = InstalledAppFlow.from_client_secrets_file(
+                        str(tmp_cred), SCOPES,
+                    )
+                    creds = flow.run_local_server(port=0)
+                    tmp_cred.unlink() # Cleanup
+                except Exception as e:
+                    logger.error(f"Failed to use GMAIL_CREDENTIALS_JSON: {e}")
 
-        TOKEN_PATH.parent.mkdir(exist_ok=True)
-        with open(TOKEN_PATH, "wb") as f:
-            pickle.dump(creds, f)
+            if not creds:
+                if not CREDENTIALS_PATH.exists():
+                    raise FileNotFoundError(
+                        "\n❌  credentials.json not found!\n"
+                        "    1. Go to https://console.cloud.google.com\n"
+                        "    2. Create a project → Enable Gmail API\n"
+                        "    3. Create OAuth 2.0 credentials (Desktop app)\n"
+                        "    4. Download and save as config/credentials.json\n"
+                    )
+                flow = InstalledAppFlow.from_client_secrets_file(
+                    str(CREDENTIALS_PATH), SCOPES,
+                )
+                creds = flow.run_local_server(port=0)
+                logger.info("New Gmail OAuth token obtained.")
+
+        # Always try to persist new token to file if possible
+        try:
+            TOKEN_PATH.parent.mkdir(exist_ok=True)
+            with open(TOKEN_PATH, "wb") as f:
+                pickle.dump(creds, f)
+        except Exception:
+            pass # Ignore if disk is read-only (common in some cloud environments)
 
     return build("gmail", "v1", credentials=creds)
 
