@@ -64,6 +64,13 @@ def _run_oauth_flow(flow: InstalledAppFlow):
     return flow.run_local_server(port=0)
 
 
+def save_token_pickle(creds) -> None:
+    """Persist OAuth credentials to TOKEN_PATH."""
+    TOKEN_PATH.parent.mkdir(exist_ok=True)
+    with open(TOKEN_PATH, "wb") as f:
+        pickle.dump(creds, f)
+
+
 def get_gmail_service():
     """Authenticate and return Gmail API service.
 
@@ -151,9 +158,7 @@ def get_gmail_service():
 
         # Always try to persist new token to file if possible
         try:
-            TOKEN_PATH.parent.mkdir(exist_ok=True)
-            with open(TOKEN_PATH, "wb") as f:
-                pickle.dump(creds, f)
+            save_token_pickle(creds)
         except Exception:
             pass # Ignore if disk is read-only (common in some cloud environments)
 

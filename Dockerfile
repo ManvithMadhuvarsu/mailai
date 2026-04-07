@@ -22,5 +22,7 @@ RUN mkdir -p data config
 # Avoid buffered output so logs appear immediately
 ENV PYTHONUNBUFFERED=1
 
-# Entry point — daemon mode for 24/7 operation
+# Entry point:
+# - Default to daemon for local Docker
+# - Railway can override start command to: uvicorn railway_app:app --host 0.0.0.0 --port $PORT
 CMD ["python", "daemon.py"]
