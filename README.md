@@ -114,6 +114,11 @@ docker-compose up -d --build
 ```
 Runs the daemon inside a container with auto-restart.
 
+**OAuth client file (`config/credentials.json`):**
+- The Docker **image does not include** this file (it is listed in `.dockerignore` on purpose).
+- At **runtime**, Compose mounts your project folder: `./config` → `/app/config`, so place the JSON on your machine as `config/credentials.json` before starting.
+- Alternatively, set **`GMAIL_CREDENTIALS_JSON`** in `.env` to the full JSON string; the app will write `config/credentials.json` on startup when the file is missing.
+
 First-time OAuth in Docker:
 - Keep `GMAIL_OAUTH_LOCAL_PORT=8080` in `.env`
 - Run `docker logs mailai-agent -f`

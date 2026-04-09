@@ -10,3 +10,6 @@ services:
       - ./config:/app/config
     env_file:
       - .env
+    environment:
+      # Ensure host .env values (e.g. POLL_INTERVAL_MINUTES) are applied on every start
+      POLL_INTERVAL_MINUTES: ${POLL_INTERVAL_MINUTES:-180}

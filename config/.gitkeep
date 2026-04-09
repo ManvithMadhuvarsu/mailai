@@ -1,0 +1,2 @@
+# Place OAuth client JSON here as credentials.json (ignored by git).
+# Docker Compose mounts this folder to /app/config at runtime.

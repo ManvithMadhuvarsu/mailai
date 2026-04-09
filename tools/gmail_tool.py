@@ -37,6 +37,19 @@ TOKEN_PATH = Path("data/token.pickle")
 CREDENTIALS_PATH = Path("config/credentials.json")
 
 
+def _materialize_credentials_from_env() -> None:
+    """If config/credentials.json is missing, write it from GMAIL_CREDENTIALS_JSON (Docker/Railway)."""
+    if CREDENTIALS_PATH.exists():
+        return
+    raw = os.getenv("GMAIL_CREDENTIALS_JSON", "").strip()
+    if not raw:
+        return
+    CREDENTIALS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    with open(CREDENTIALS_PATH, "w", encoding="utf-8") as f:
+        f.write(raw)
+    logger.info("Wrote config/credentials.json from GMAIL_CREDENTIALS_JSON environment variable.")
+
+
 def _is_headless_runtime() -> bool:
     """Return True when running in a non-interactive/headless environment."""
     # Docker containers are typically headless for OAuth browser flow.
@@ -79,6 +92,8 @@ def get_gmail_service():
     expire tokens every 7 days), the stale token is deleted and a fresh
     OAuth flow is triggered.
     """
+    _materialize_credentials_from_env()
+
     creds = None
     loaded_from_env_token = False
     
@@ -120,41 +135,24 @@ def get_gmail_service():
                     ) from e
 
         if not creds:
-            # Check for CREDENTIALS_JSON from Environment (Render/Cloud Support)
-            creds_json = os.getenv("GMAIL_CREDENTIALS_JSON")
-            if creds_json:
-                try:
-                    logger.info("Using GMAIL_CREDENTIALS_JSON from environment.")
-                    import json
-                    from google.oauth2.credentials import Credentials
-                    from google_auth_oauthlib.flow import Flow
-                    # Store as temp file for InstallAppFlow (needs a path)
-                    tmp_cred = Path("config/tmp_credentials.json")
-                    tmp_cred.parent.mkdir(exist_ok=True)
-                    with open(tmp_cred, "w") as f:
-                        f.write(creds_json)
-                    flow = InstalledAppFlow.from_client_secrets_file(
-                        str(tmp_cred), SCOPES,
-                    )
-                    creds = _run_oauth_flow(flow)
-                    tmp_cred.unlink() # Cleanup
-                except Exception as e:
-                    logger.error(f"Failed to use GMAIL_CREDENTIALS_JSON: {e}")
-
-            if not creds:
-                if not CREDENTIALS_PATH.exists():
-                    raise FileNotFoundError(
-                        "\n❌  credentials.json not found!\n"
-                        "    1. Go to https://console.cloud.google.com\n"
-                        "    2. Create a project → Enable Gmail API\n"
-                        "    3. Create OAuth 2.0 credentials (Desktop app)\n"
-                        "    4. Download and save as config/credentials.json\n"
-                    )
-                flow = InstalledAppFlow.from_client_secrets_file(
-                    str(CREDENTIALS_PATH), SCOPES,
+            if not CREDENTIALS_PATH.exists():
+                raise FileNotFoundError(
+                    "\n❌  credentials.json not found!\n"
+                    "    Option A — Local / Docker bind mount:\n"
+                    "      Save your Google OAuth client JSON as: config/credentials.json\n"
+                    "    Option B — Environment variable (Docker/Railway):\n"
+                    "      Set GMAIL_CREDENTIALS_JSON to the full JSON string (same file contents).\n"
+                    "    Google Cloud setup:\n"
+                    "    1. Go to https://console.cloud.google.com\n"
+                    "    2. Create a project → Enable Gmail API\n"
+                    "    3. Create OAuth 2.0 credentials (Desktop app)\n"
+                    "    4. Download the JSON and use as above\n"
                 )
-                creds = _run_oauth_flow(flow)
-                logger.info("New Gmail OAuth token obtained.")
+            flow = InstalledAppFlow.from_client_secrets_file(
+                str(CREDENTIALS_PATH), SCOPES,
+            )
+            creds = _run_oauth_flow(flow)
+            logger.info("New Gmail OAuth token obtained.")
 
         # Always try to persist new token to file if possible
         try:
