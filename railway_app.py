@@ -128,11 +128,13 @@ def login(request: Request):
     authorization_url, state = flow.authorization_url(
         access_type="offline",
         include_granted_scopes="true",
-        prompt="consent",
+        prompt="select_account consent",
     )
-    # Store state in cookie (simple single-user deployment)
+    # Store state + PKCE verifier in cookies for callback validation/token exchange.
     resp = RedirectResponse(url=authorization_url)
     resp.set_cookie("oauth_state", state, httponly=True, secure=True, samesite="lax")
+    if getattr(flow, "code_verifier", None):
+        resp.set_cookie("oauth_code_verifier", flow.code_verifier, httponly=True, secure=True, samesite="lax")
     return resp
 
 
@@ -144,13 +146,19 @@ def oauth_callback(request: Request, code: str | None = None, state: str | None 
     cookie_state = request.cookies.get("oauth_state")
     if state and cookie_state and state != cookie_state:
         return PlainTextResponse("Invalid OAuth state", status_code=400)
+    code_verifier = request.cookies.get("oauth_code_verifier")
+    if not code_verifier:
+        return PlainTextResponse("Missing OAuth code verifier cookie. Restart login.", status_code=400)
 
     flow = _build_flow(request)
     # Exchange code for tokens
-    flow.fetch_token(code=code)
+    flow.fetch_token(code=code, code_verifier=code_verifier)
     creds = flow.credentials
     save_token_pickle(creds)
     # Persist token so redeploys don't require re-auth (S3-compatible bucket).
     try_persist_file(TOKEN_PATH)
-    return RedirectResponse(url="/")
+    resp = RedirectResponse(url="/")
+    resp.delete_cookie("oauth_state")
+    resp.delete_cookie("oauth_code_verifier")
+    return resp
 
