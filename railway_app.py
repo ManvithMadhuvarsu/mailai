@@ -10,8 +10,6 @@ from dotenv import load_dotenv
 
 from google_auth_oauthlib.flow import Flow
 
-from app.config import multi_tenant_enabled
-from app.multi_tenant_app import create_multi_tenant_app
 from main import run
 from tools.gmail_tool import (
     SCOPES,
@@ -89,9 +87,6 @@ def _start_daemon_loop_once():
 
 
 app = FastAPI()
-if multi_tenant_enabled():
-    logger.info("MULTI_TENANT_ENABLED=true: mounting /app routes.")
-    app.mount("/app", create_multi_tenant_app())
 
 
 @app.on_event("startup")
