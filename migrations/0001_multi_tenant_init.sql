@@ -1,0 +1,62 @@
+-- Initial multi-tenant schema for MailAI
+
+CREATE TABLE IF NOT EXISTS users (
+  id INTEGER PRIMARY KEY,
+  email VARCHAR(320) UNIQUE NOT NULL,
+  password_hash VARCHAR(255) NOT NULL,
+  is_active BOOLEAN NOT NULL DEFAULT 1,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS gmail_accounts (
+  id INTEGER PRIMARY KEY,
+  user_id INTEGER NOT NULL,
+  provider VARCHAR(50) NOT NULL DEFAULT 'google',
+  gmail_email VARCHAR(320) NOT NULL DEFAULT '',
+  encrypted_refresh_token TEXT NOT NULL,
+  scopes TEXT NOT NULL DEFAULT '',
+  status VARCHAR(50) NOT NULL DEFAULT 'connected',
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY(user_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS user_preferences (
+  id INTEGER PRIMARY KEY,
+  user_id INTEGER UNIQUE NOT NULL,
+  mode VARCHAR(20) NOT NULL DEFAULT 'labels_only',
+  poll_interval_minutes INTEGER NOT NULL DEFAULT 180,
+  paused BOOLEAN NOT NULL DEFAULT 0,
+  model_preference VARCHAR(50) NOT NULL DEFAULT 'groq',
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY(user_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS job_runs (
+  id INTEGER PRIMARY KEY,
+  user_id INTEGER NOT NULL,
+  status VARCHAR(30) NOT NULL DEFAULT 'queued',
+  summary TEXT NOT NULL DEFAULT '',
+  error TEXT NOT NULL DEFAULT '',
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  finished_at TIMESTAMP NULL,
+  FOREIGN KEY(user_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS processed_messages (
+  id INTEGER PRIMARY KEY,
+  user_id INTEGER NOT NULL,
+  gmail_message_id VARCHAR(255) NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY(user_id) REFERENCES users(id),
+  UNIQUE(user_id, gmail_message_id)
+);
+
+CREATE TABLE IF NOT EXISTS audit_logs (
+  id INTEGER PRIMARY KEY,
+  user_id INTEGER NULL,
+  action VARCHAR(100) NOT NULL,
+  details TEXT NOT NULL DEFAULT '',
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
