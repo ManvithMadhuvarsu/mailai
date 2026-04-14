@@ -169,11 +169,6 @@ sh -c "uvicorn railway_app:app --host 0.0.0.0 --port $PORT"
 - `GMAIL_CREDENTIALS_JSON`
 - `POLL_INTERVAL_MINUTES`
 - LLM config (`GROQ_API_KEY` and/or Ollama settings)
-- For multi-tenant mode:
-  - `APP_MODE=multi_tenant`
-  - `MULTI_TENANT_ENABLED=true`
-  - `DATABASE_URL=...` (Postgres recommended)
-  - `MAILAI_APP_SECRET=...`
 
 ### Google OAuth Configuration
 
@@ -194,32 +189,6 @@ If persistent volumes are unavailable, enable S3-compatible token storage:
 - `AWS_SECRET_ACCESS_KEY=...`
 - `AWS_REGION=auto`
 
-## Multi-Tenant SaaS Mode (Phased Rollout)
-
-MailAI now includes a feature-gated multi-tenant app under `/app` when:
-
-- `APP_MODE=multi_tenant`
-- `MULTI_TENANT_ENABLED=true`
-
-Key endpoints:
-
-- `/app/auth/signup`, `/app/auth/login`, `/app/auth/logout`
-- `/app/oauth/google/start`, `/app/oauth/google/callback`, `/app/oauth/google/disconnect`
-- `/app/dashboard`, `/app/preferences`
-- `/app/agent/pause`, `/app/agent/resume`, `/app/agent/activity`
-- `/app/data/delete`
-
-Progressive rollout controls:
-
-- `MULTI_TENANT_ALLOWLIST_ENABLED=true`
-- `MULTI_TENANT_ALLOWLIST=user1@example.com,user2@example.com`
-
-Background worker entrypoint:
-
-```bash
-python worker/runner.py
-```
-
 ## Configuration Reference
 
 See `.env.example` for the complete, up-to-date variable list.
@@ -238,7 +207,6 @@ Important variables:
 - Rotate credentials immediately if exposed
 - Prefer least-privilege API keys
 - Use separate OAuth clients for local and hosted environments
-- Review runbooks in `docs/security-runbook.md`, `docs/privacy.md`, and `docs/terms.md`
 
 ## Troubleshooting
 
