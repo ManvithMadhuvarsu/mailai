@@ -111,38 +111,22 @@ class EmailState(TypedDict):
 
 
 # ── Prompts ───────────────────────────────────────────────────────────────────
-CLASSIFY_AND_ACTION_PROMPT = ChatPromptTemplate.from_messages([
-    ("system", """You are an expert email classifier for a job applicant named {candidate_name}.
+CLASSIFY_PROMPT = ChatPromptTemplate.from_messages([
+    ("system", """Job email classifier for applicant {candidate_name}.
 
-Classify the email into EXACTLY ONE category and choose EXACTLY ONE action.
+Return EXACTLY ONE token from this set:
+REJECTION, INTERVIEW, HOLD, FOLLOW_UP, APPLIED, IRRELEVANT
 
-Categories:
-- REJECTION
-- INTERVIEW
-- HOLD
-- FOLLOW_UP
-- APPLIED
-- IRRELEVANT
+Rules:
+- REJECTION: declined, not selected, not moving forward, regret, unfortunately
+- INTERVIEW: interview, schedule, screening, assessment, test, next round
+- HOLD: under review, waitlisted, will update, shortlist pending
+- FOLLOW_UP: asks candidate for documents/info/availability/salary/references
+- APPLIED: application received / submission confirmed
+- IRRELEVANT: newsletters, promos, OTP, banking, non-job
 
-Actions:
-- DRAFT_FEEDBACK
-- DRAFT_CONFIRM
-- DRAFT_RESPONSE
-- LABEL_ONLY
-- SKIP
-
-Required mapping:
-- REJECTION  -> DRAFT_FEEDBACK
-- INTERVIEW  -> DRAFT_CONFIRM
-- HOLD       -> LABEL_ONLY
-- FOLLOW_UP  -> DRAFT_RESPONSE
-- APPLIED    -> LABEL_ONLY
-- IRRELEVANT -> SKIP
-
-Respond in this exact format, one line only:
-CATEGORY|ACTION
-
-No extra text."""),
+If unsure, IRRELEVANT.
+Output the single token only."""),
     ("human", "Subject: {subject}\nFrom: {sender}\n\nEmail Body:\n{body}"),
 ])
 
@@ -269,9 +253,36 @@ def _heuristic_result(email: dict) -> tuple[str, str] | None:
     return None
 
 
+def _extract_category(raw: str | None) -> str:
+    valid = ("REJECTION", "INTERVIEW", "HOLD", "FOLLOW_UP", "APPLIED", "IRRELEVANT")
+    if not raw:
+        return "IRRELEVANT"
+    upper = raw.upper()
+    # Prefer exact/clean token.
+    token = upper.strip().split()[0].strip(".,:;|")
+    if token in valid:
+        return token
+    # Fallback: find any valid label in noisy output.
+    for v in valid:
+        if v in upper:
+            return v
+    return "IRRELEVANT"
+
+
+def _action_from_category(category: str) -> str:
+    return {
+        "REJECTION": "DRAFT_FEEDBACK",
+        "INTERVIEW": "DRAFT_CONFIRM",
+        "HOLD": "LABEL_ONLY",
+        "FOLLOW_UP": "DRAFT_RESPONSE",
+        "APPLIED": "LABEL_ONLY",
+        "IRRELEVANT": "SKIP",
+    }.get(category, "LABEL_ONLY")
+
+
 # ── Agent Nodes ───────────────────────────────────────────────────────────────
 def classify_and_action_node(state: EmailState) -> EmailState:
-    """Single LLM pass for category + action (with heuristics first)."""
+    """Low-token classify pass + deterministic action mapping (heuristics first)."""
     email = state["email"]
     heuristic = _heuristic_result(email)
     if heuristic:
@@ -279,39 +290,15 @@ def classify_and_action_node(state: EmailState) -> EmailState:
         logger.info(f"Heuristic classified '{email['subject'][:50]}' -> {category} ({action})")
         return {**state, "category": category, "action": action}
 
-    response = safe_invoke(CLASSIFY_AND_ACTION_PROMPT, {
+    response = safe_invoke(CLASSIFY_PROMPT, {
         "candidate_name": os.getenv("YOUR_NAME", "the candidate"),
         "subject": email["subject"],
         "sender": email["sender"],
         "body": _body_excerpt(email.get("body", ""), _max_classify_chars()),
     })
 
-    valid = {"REJECTION", "INTERVIEW", "HOLD", "FOLLOW_UP", "APPLIED", "IRRELEVANT"}
-    valid_actions = {"DRAFT_FEEDBACK", "DRAFT_CONFIRM", "DRAFT_RESPONSE", "LABEL_ONLY", "SKIP"}
-
-    category = "IRRELEVANT"
-    action = "SKIP"
-    if response and "|" in response:
-        left, right = response.strip().split("|", 1)
-        category = left.strip().upper()
-        action = right.strip().upper()
-    elif response:
-        # fallback for non-compliant output
-        category = response.upper().strip().split()[0]
-
-    if category not in valid:
-        logger.warning(f"Unexpected category '{response}' → defaulting to IRRELEVANT")
-        category = "IRRELEVANT"
-    mapping = {
-        "REJECTION": "DRAFT_FEEDBACK",
-        "INTERVIEW": "DRAFT_CONFIRM",
-        "HOLD": "LABEL_ONLY",
-        "FOLLOW_UP": "DRAFT_RESPONSE",
-        "APPLIED": "LABEL_ONLY",
-        "IRRELEVANT": "SKIP",
-    }
-    if action not in valid_actions:
-        action = mapping[category]
+    category = _extract_category(response)
+    action = _action_from_category(category)
     # Hard safety: don't burn tokens drafting to no-reply senders.
     if _is_noreply(email.get("sender", "")) and action.startswith("DRAFT_"):
         action = "LABEL_ONLY" if category != "IRRELEVANT" else "SKIP"
