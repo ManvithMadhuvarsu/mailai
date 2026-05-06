@@ -16,6 +16,7 @@ from tools.gmail_tool import (
     CREDENTIALS_PATH,
     TOKEN_PATH,
     save_token_pickle,
+    materialize_token_pickle_from_env,
     _materialize_credentials_from_env,
 )
 from tools.s3_state import try_persist_file, try_restore_file
@@ -102,8 +103,12 @@ def _startup():
     # Ensure dirs exist for volume mounts
     Path("data").mkdir(exist_ok=True)
     Path("config").mkdir(exist_ok=True)
+    _materialize_credentials_from_env()
     # If persistent volumes aren't available, optionally restore token from S3-compatible bucket.
     try_restore_file(TOKEN_PATH)
+    # Fall back to env-backed token bootstrap when S3 restore is unavailable.
+    if not TOKEN_PATH.exists():
+        materialize_token_pickle_from_env()
     _start_daemon_loop_once()
 
 
@@ -171,4 +176,3 @@ def oauth_callback(request: Request, code: str | None = None, state: str | None 
     resp.delete_cookie("oauth_state")
     resp.delete_cookie("oauth_code_verifier")
     return resp
-

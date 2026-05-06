@@ -84,6 +84,36 @@ def save_token_pickle(creds) -> None:
         pickle.dump(creds, f)
 
 
+def _load_env_token_pickle():
+    """Decode credentials from GMAIL_TOKEN_PICKLE_B64, if present and valid."""
+    token_b64 = os.getenv("GMAIL_TOKEN_PICKLE_B64", "").strip()
+    if not token_b64:
+        return None
+    try:
+        creds_data = base64.b64decode(token_b64)
+        return pickle.loads(creds_data)
+    except Exception as e:
+        logger.error(f"Failed to decode GMAIL_TOKEN_PICKLE_B64: {e}")
+        return None
+
+
+def materialize_token_pickle_from_env() -> bool:
+    """
+    Persist an env-backed token to TOKEN_PATH when the file is missing.
+
+    This lets hosted runtimes boot from GMAIL_TOKEN_PICKLE_B64 even when
+    persistent file restore is unavailable.
+    """
+    if TOKEN_PATH.exists():
+        return False
+    creds = _load_env_token_pickle()
+    if not creds:
+        return False
+    save_token_pickle(creds)
+    logger.info("Wrote data/token.pickle from GMAIL_TOKEN_PICKLE_B64.")
+    return True
+
+
 def get_gmail_service():
     """Authenticate and return Gmail API service.
 

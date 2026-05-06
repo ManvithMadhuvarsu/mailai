@@ -170,6 +170,20 @@ sh -c "uvicorn railway_app:app --host 0.0.0.0 --port $PORT"
 - `POLL_INTERVAL_MINUTES`
 - LLM config (`GROQ_API_KEY` and/or Ollama settings)
 
+### Optional Gmail Token Bootstrap
+
+If `data/token.pickle` is not persisted yet, hosted environments can bootstrap
+Gmail auth from:
+
+- `GMAIL_TOKEN_PICKLE_B64`
+- S3-compatible restore via `MAILAI_STATE_S3_*`
+
+Startup order is:
+
+1. Existing local `data/token.pickle`
+2. S3 restore into `data/token.pickle`
+3. `GMAIL_TOKEN_PICKLE_B64` materialized into `data/token.pickle`
+
 ### Google OAuth Configuration
 
 Use a **Web application** OAuth client in Google Cloud and set:
@@ -188,6 +202,9 @@ If persistent volumes are unavailable, enable S3-compatible token storage:
 - `AWS_ACCESS_KEY_ID=...`
 - `AWS_SECRET_ACCESS_KEY=...`
 - `AWS_REGION=auto`
+
+If you do not want to use S3, you can instead set `GMAIL_TOKEN_PICKLE_B64`
+to a base64-encoded `token.pickle` and the app will materialize it on startup.
 
 ## Configuration Reference
 
@@ -219,6 +236,13 @@ Important variables:
 
 - Ensure latest `railway_app.py` is deployed
 - Restart login flow from `/login`
+
+### `Could not restore data/token.pickle from S3 ... 403 Forbidden`
+
+- Verify `MAILAI_STATE_S3_BUCKET`, `MAILAI_STATE_S3_ENDPOINT_URL`, and `MAILAI_STATE_S3_PREFIX`
+- Verify `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`
+- Confirm the bucket policy allows read/write for `mailai/data/token.pickle`
+- As a fallback, set `GMAIL_TOKEN_PICKLE_B64` so the app can boot without S3
 
 ### `credentials.json not found`
 

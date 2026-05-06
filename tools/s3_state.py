@@ -54,7 +54,10 @@ def try_restore_file(local_path: Path) -> bool:
         logger.info(f"Restored {local_path} from s3://{bucket}/{key}")
         return True
     except Exception as e:
-        logger.warning(f"Could not restore {local_path} from S3: {e}")
+        logger.warning(
+            f"Could not restore {local_path} from s3://{bucket}/{key}: {e}. "
+            "Check MAILAI_STATE_S3_* settings and bucket read permissions."
+        )
         return False
 
 
@@ -78,6 +81,8 @@ def try_persist_file(local_path: Path) -> bool:
         logger.info(f"Persisted {local_path} to s3://{bucket}/{key}")
         return True
     except Exception as e:
-        logger.warning(f"Could not persist {local_path} to S3: {e}")
+        logger.warning(
+            f"Could not persist {local_path} to s3://{bucket}/{key}: {e}. "
+            "Check MAILAI_STATE_S3_* settings and bucket write permissions."
+        )
         return False
-
